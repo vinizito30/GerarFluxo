@@ -29,8 +29,9 @@ Sub GerarFluxo()
     Dim linhaOriginalAtualizada As Object
     Dim variacao As Double
     Dim primeiraCelulaVazia As Boolean
-    Dim intervaloFonte As Range
-    Dim intervaloDestino As Range
+    Dim encontrouZero As Boolean
+    Dim limiteColunaAnalise As Long
+    Dim linha As Variant
 
     Application.DisplayAlerts = False
     Set ws = ActiveSheet
@@ -45,7 +46,7 @@ Sub GerarFluxo()
     Next i
     
     limiteHorizontal = ws.Columns.Count
-    variacao = 50
+    variacao = 700
     tempoInicio = Timer
 
     Set celulaIniciar = ws.Cells.Find(What:="INICIAR", LookIn:=xlValues, LookAt:=xlWhole)
@@ -87,7 +88,9 @@ Sub GerarFluxo()
         todosIguais = True
         valorComparacao = ws.Cells(linhaAtual, colunaInicial).Value
         primeiraCelulaVazia = False
-
+        encontrouZero = False
+        limiteColunaAnalise = limiteHorizontal
+        
         For colunaAtual = colunaInicial To limiteHorizontal
             valorCelula = ws.Cells(linhaAtual, colunaAtual).Value
 
@@ -96,21 +99,21 @@ Sub GerarFluxo()
                 Exit For
             End If
 
-            If IsNumeric(valorComparacao) Then
-                If CDbl(valorComparacao) = 0 Then
-' Ignorar valores zero
+            If IsNumeric(valorCelula) Then
+                If CDbl(valorCelula) = 0 Then
+                    encontrouZero = True
+                    limiteColunaAnalise = colunaAtual - 1 ' Definir a coluna limite para análise
+                    Exit For
                 ElseIf IsNumeric(valorComparacao) And _
-                    (CDbl(valorComparacao) >= CDbl(valorCelula) - variacao And _
-                    CDbl(valorComparacao) <= CDbl(valorCelula) + variacao) Then
-' Ignorar valores dentro da faixa de variação
+                    (CDbl(valorCelula) >= CDbl(valorComparacao) - variacao And _
+                    CDbl(valorCelula) <= CDbl(valorComparacao) + variacao) Then
+                    ' Ignorar valores dentro da faixa de variação
                 Else
- ' Considerar valores diferentes e adicionar ao dicionário
-                    If CDbl(valorComparacao) <> CDbl(valorCelula) Then
+                    ' Considerar valores diferentes e adicionar ao dicionário
+                    If CDbl(valorCelula) <> CDbl(valorComparacao) Then
                         todosIguais = False
                         Dim valorDiferenca As Double
-                        valorDiferenca = CDbl(valorComparacao) - CDbl(valorCelula)
-' Convertendo a diferença para o valor absoluto
-                        valorDiferenca = Abs(valorDiferenca)
+                        valorDiferenca = CDbl(valorCelula) - CDbl(valorComparacao)
                         If Not valoresDiferentes.Exists(colunaAtual) Then
                             valoresDiferentes.Add colunaAtual, valorDiferenca
                         End If
@@ -123,36 +126,47 @@ Sub GerarFluxo()
             novaLinhaInserida = True
             ws.Rows(linhaAtual + 1).Insert Shift:=xlDown
 
+            ' Copiar valores diferentes para a nova linha
             For Each colunaDiferente In valoresDiferentes.Keys
                 ws.Cells(linhaAtual + 1, colunaDiferente).Value = valoresDiferentes(colunaDiferente)
                 ws.Cells(linhaAtual + 1, colunaDiferente).Interior.Color = corPintura
             Next colunaDiferente
 
+            ' Copiar valores após o 0 para a nova linha e apagar da célula original
+            For colunaAtual = limiteColunaAnalise + 1 To limiteHorizontal
+                If Not IsEmpty(ws.Cells(linhaAtual, colunaAtual).Value) Then
+                    ws.Cells(linhaAtual + 1, colunaAtual).Value = ws.Cells(linhaAtual, colunaAtual).Value
+                    ws.Cells(linhaAtual, colunaAtual).ClearContents  ' Limpa o valor da célula original
+                End If
+            Next colunaAtual
+
+            ' Atualiza o nome do cliente na nova linha
             If contador.Exists(nomeCliente) Then
                 contador(nomeCliente) = contador(nomeCliente) + 1
             Else
                 contador.Add nomeCliente, 1
             End If
-
             ws.Cells(linhaAtual + 1, 1).Value = nomeCliente & "_" & contador(nomeCliente)
 
-' Copiar fórmulas e colar especial
+            ' Copiar fórmulas e colar especial
             For i = LBound(colunasAdicionais) To UBound(colunasAdicionais)
                 ws.Cells(linhaAtual, colunasAdicionais(i)).Copy
                 ws.Cells(linhaAtual + 1, colunasAdicionais(i)).PasteSpecial Paste:=xlPasteFormulas
                 ws.Cells(linhaAtual + 1, colunasAdicionais(i)).Interior.Color = _
                     ws.Cells(linhaAtual, colunasAdicionais(i)).Interior.Color
             Next i
-            
- ' Limpar a área de transferência
+
+            ' Limpar a área de transferência
             Application.CutCopyMode = False
 
+            ' Garantir que a nova linha não tenha células vazias, preenchendo com 0 se necessário
             For colunaAtual = colunaInicial To ws.Cells(linhaAtual + 1, ws.Columns.Count).End(xlToLeft).Column
                 If IsEmpty(ws.Cells(linhaAtual + 1, colunaAtual).Value) Then
                     ws.Cells(linhaAtual + 1, colunaAtual).Value = 0
                 End If
             Next colunaAtual
 
+            ' Marcar a linha original como atualizada
             linhaOriginalAtualizada(linhaAtual) = True
             ultimaLinha = ultimaLinha + 1
             linhaAtual = linhaAtual + 1
@@ -164,14 +178,14 @@ ProximaLinha:
         DoEvents
     Loop
 
+    ' Ajustar as linhas originais
     For Each linha In linhaOriginalAtualizada.Keys
         valorPrimeiro = ws.Cells(linha, colunaInicial).Value
         For colunaAtual = colunaInicial To ws.Cells(linha, ws.Columns.Count).End(xlToLeft).Column
-    
-' Manter o valor original na linha se estiver dentro da faixa de variação
+            ' Manter o valor original na linha se estiver dentro da faixa de variação e antes do 0
             If IsNumeric(ws.Cells(linha, colunaAtual).Value) And _
                ws.Cells(linha, colunaAtual).Value <> valorPrimeiro Then
-                If ws.Cells(linha, colunaAtual).Value <> 0 Then
+                If ws.Cells(linha, colunaAtual).Value <> 0 And colunaAtual <= limiteColunaAnalise Then
                     If Not (IsNumeric(valorPrimeiro) And _
                             CDbl(ws.Cells(linha, colunaAtual).Value) >= CDbl(valorPrimeiro) - variacao And _
                             CDbl(ws.Cells(linha, colunaAtual).Value) <= CDbl(valorPrimeiro) + variacao) Then
@@ -182,14 +196,12 @@ ProximaLinha:
         Next colunaAtual
     Next linha
 
-' Finalização do cronometro de tempo de processamento.
     Application.DisplayAlerts = True
     tempoFim = Timer
     tempoExecucao = tempoFim - tempoInicio
     minutos = Int(tempoExecucao / 60)
     segundos = tempoExecucao Mod 60
 
-' Mensagem final encerrando o processo e informando o tempo de processamento.
     MsgBox "Fluxo anual e mensal segregado com sucesso!" & vbCrLf & _
            "Tempo de execução: " & minutos & " minuto(s) e " & Format(segundos, "00") & " segundo(s)", _
            vbInformation, "Processo Finalizado"
