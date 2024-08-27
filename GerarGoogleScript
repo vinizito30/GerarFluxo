@@ -1,0 +1,163 @@
+function gerarFluxo() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const corPintura = "#FFFF00"; // Cor amarela em hexadecimal
+  const contador = {};
+  const variacao = 100;
+  const tempoInicio = new Date().getTime();
+
+  // Definição de colunas adicionais
+  const nColunasAdicionais = 112; // Número fixo de colunas adicionais
+  const colunasAdicionais = Array.from({ length: nColunasAdicionais }, (_, i) => i + 2); // Cria o array de 2 a 113
+
+  try {
+    const celulaIniciar = findCell(sheet, "INICIAR");
+    if (!celulaIniciar) {
+      SpreadsheetApp.getUi().alert("Texto 'INICIAR' não encontrado na planilha.");
+      return;
+    }
+
+    const colunaInicial = celulaIniciar.getColumn();
+    let linhaAtual = celulaIniciar.getRow() + 2;
+    let textoEncontrado = false;
+
+    while (!textoEncontrado && linhaAtual <= sheet.getLastRow()) {
+      if (isRowHidden(sheet, linhaAtual)) {
+        linhaAtual++;
+        continue;
+      }
+
+      const dadosPlanilha = sheet.getDataRange().getValues();
+      const valorPrimeiro = dadosPlanilha[linhaAtual - 1][colunaInicial - 1];
+
+      if (typeof valorPrimeiro === 'string' && valorPrimeiro.trim().toUpperCase() === "PARAR") {
+        textoEncontrado = true;
+        break;
+      }
+
+      if (typeof valorPrimeiro === 'number' && valorPrimeiro === 0) {
+        linhaAtual++;
+        continue;
+      }
+
+      const nomeCliente = String(dadosPlanilha[linhaAtual - 1][0]);
+      const valoresDiferentes = {};
+      let todosIguais = true;
+      const valorComparacao = dadosPlanilha[linhaAtual - 1][colunaInicial - 1];
+      let encontrouZero = false;
+      let encontrouNegrito = false;
+      let limiteColunaAnalise = sheet.getLastColumn();
+      let ultimaCelulaComValorDiferente = colunaInicial - 1;
+
+      const dadosLinha = dadosPlanilha[linhaAtual - 1];
+      const estilosLinha = sheet.getRange(linhaAtual, 1, 1, sheet.getLastColumn()).getFontWeights()[0];
+      const fundosLinha = sheet.getRange(linhaAtual, 1, 1, sheet.getLastColumn()).getBackgrounds()[0];
+
+      for (let colunaAtual = colunaInicial; colunaAtual <= limiteColunaAnalise; colunaAtual++) {
+        const valorCelula = dadosLinha[colunaAtual - 1];
+        const estiloCelula = estilosLinha[colunaAtual - 1];
+        const fundoCelula = fundosLinha[colunaAtual - 1];
+
+        if (valorCelula !== '' && typeof valorCelula === 'number') {
+          if (valorCelula === 0) {
+            encontrouZero = true;
+            limiteColunaAnalise = colunaAtual - 1;
+            break;
+          } else if (typeof valorComparacao === 'number' && 
+                     (valorCelula >= valorComparacao - variacao && valorCelula <= valorComparacao + variacao)) {
+            // Ignorar valores dentro da faixa de variação
+          } else {
+            todosIguais = false;
+            const valorDiferenca = valorCelula - valorComparacao;
+            valoresDiferentes[colunaAtual] = valorDiferenca;
+            ultimaCelulaComValorDiferente = Math.max(ultimaCelulaComValorDiferente, colunaAtual);
+          }
+        }
+
+        if (estiloCelula === "bold") {
+          encontrouNegrito = true;
+          limiteColunaAnalise = colunaAtual - 1;
+          break;
+        }
+      }
+
+      if (!todosIguais || encontrouZero || encontrouNegrito) {
+        // Insere nova linha
+        sheet.insertRowsAfter(linhaAtual, 1);
+
+        // Atualiza os valores na nova linha
+        const novaLinha = linhaAtual + 1;
+        const dadosNovaLinha = new Array(dadosPlanilha[0].length).fill(''); // Inicializa com vazio
+        const fundosNovaLinha = new Array(dadosPlanilha[0].length).fill('#FFFFFF'); // Inicializa com branco
+
+        for (const colunaDiferente in valoresDiferentes) {
+          const colIndex = parseInt(colunaDiferente, 10) - 1;
+          dadosNovaLinha[colIndex] = valoresDiferentes[colunaDiferente];
+          fundosNovaLinha[colIndex] = corPintura; // Define a cor amarela para valores diferentes
+        }
+
+        // Copia os dados da linha original para a nova linha
+        for (const colunaAdicional of colunasAdicionais) {
+          dadosNovaLinha[colunaAdicional - 1] = dadosPlanilha[linhaAtual - 1][colunaAdicional - 1];
+        }
+
+        if (contador[nomeCliente]) {
+          contador[nomeCliente]++;
+        } else {
+          contador[nomeCliente] = 1;
+        }
+        dadosNovaLinha[0] = `${nomeCliente}_${contador[nomeCliente]}`;
+
+        // Atualiza os dados na memória
+        dadosPlanilha.splice(novaLinha - 1, 0, dadosNovaLinha); // Insere a nova linha em memória
+
+        // Atualiza a planilha com os dados modificados
+        const numRows = dadosPlanilha.length;
+        const numCols = dadosPlanilha[0].length;
+
+        if (numRows > sheet.getMaxRows()) {
+          sheet.insertRowsAfter(sheet.getMaxRows(), numRows - sheet.getMaxRows());
+        }
+
+        sheet.getRange(1, 1, numRows, numCols).setValues(dadosPlanilha);
+
+        // Atualiza a célula original com o valor da célula de referência
+        const referencia = dadosPlanilha[linhaAtual - 1][colunaInicial - 1];
+        sheet.getRange(linhaAtual, colunaInicial).setValue(referencia);
+
+        // Avança para a próxima linha após inserção
+        linhaAtual = novaLinha + 1; 
+      } else {
+        linhaAtual++;
+      }
+    }
+
+    const tempoFim = new Date().getTime();
+    const tempoExecucao = (tempoFim - tempoInicio) / 1000;
+    const minutos = Math.floor(tempoExecucao / 60);
+    const segundos = (tempoExecucao % 60).toFixed(2);
+
+    SpreadsheetApp.getUi().alert(`Fluxo anual e mensal segregado com sucesso!\nTempo de execução: ${minutos} minuto(s) e ${segundos} segundo(s)`);
+  } catch (error) {
+    Logger.log('Erro ao gerar fluxo: ' + error.message);
+    SpreadsheetApp.getUi().alert('Erro ao gerar fluxo. Verifique o log para detalhes.');
+  }
+}
+
+function isRowHidden(sheet, row) {
+  return sheet.isRowHiddenByUser(row) || sheet.getRowHeight(row) === 0;
+}
+
+function findCell(sheet, text) {
+  const range = sheet.getDataRange();
+  const values = range.getValues();
+
+  for (let i = 0; i < values.length; i++) {
+    for (let j = 0; j < values[i].length; j++) {
+      if (values[i][j].toString().trim().toUpperCase() === text.toUpperCase()) {
+        return sheet.getRange(i + 1, j + 1);
+      }
+    }
+  }
+
+  return null;
+}
