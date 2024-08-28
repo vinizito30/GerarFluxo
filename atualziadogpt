@@ -41,6 +41,7 @@ function analisarEInserirLinha() {
     }
 
     // Atualizar os valores e fontes após possíveis alterações
+    // Atualizar apenas após o loop principal
     values = sheet.getDataRange().getValues();
     fontWeights = sheet.getDataRange().getFontWeights(); 
 
@@ -78,8 +79,8 @@ function analisarEInserirLinha() {
         break;
       }
 
-      if (valorAtual !== valorReferencia) {
-        // Armazenar coluna com valor diferente
+      if (valorAtual !== valorReferencia && !isNegrito) {
+        // Armazenar coluna com valor diferente se não estiver em negrito
         diferencas.push(colunaAtual);
       }
 
@@ -134,10 +135,19 @@ function analisarEInserirLinha() {
         }
       }
 
-      // Adicionar valores negrito sem subtração
+      // Adicionar valores negrito na nova linha e limpar os valores originais
       valoresNegrito.forEach(function(negrito) {
         novaLinhaValores[negrito.coluna - 1] = negrito.valor;
+        // Limpar a célula original
+        sheet.getRange(linhaAtual, negrito.coluna).setValue('');
       });
+
+      // Preencher com 0 entre o último valor diferente e os valores negrito
+      var ultimaColunaDiferenca = diferencas.length > 0 ? diferencas[diferencas.length - 1] : -1;
+      var primeiraColunaNegrito = valoresNegrito.length > 0 ? valoresNegrito[0].coluna - 1 : -1;
+      for (var col = ultimaColunaDiferenca + 1; col < primeiraColunaNegrito; col++) {
+        novaLinhaValores[col] = 0;
+      }
 
       // Copiar valores das colunas 2 até a 112 da linha atual para a nova linha
       for (var col = 1; col <= 112; col++) {
@@ -161,9 +171,11 @@ function analisarEInserirLinha() {
       });
       novaLinhaRange.setBackgrounds([novaLinhaBackgrounds]);
 
-      // Recolocar o valor da célula de referência nas células com valor diferente
+      // Recolocar o valor da célula de referência nas células com valor diferente, mas não para células em negrito
       diferencas.forEach(function(colunaDiferenca) {
-        sheet.getRange(linhaAtual, colunaDiferenca + 1).setValue(valorReferencia);
+        if (!valoresNegrito.some(negrito => negrito.coluna - 1 === colunaDiferenca)) {
+          sheet.getRange(linhaAtual, colunaDiferenca + 1).setValue(valorReferencia);
+        }
       });
 
       // Atualizar o número de linhas após a inserção
@@ -171,8 +183,9 @@ function analisarEInserirLinha() {
       
       // Atualizar a linha atual e os valores
       linhaAtual++;
-      values = sheet.getDataRange().getValues(); // Atualizar valores após inserção
-      fontWeights = sheet.getDataRange().getFontWeights(); // Atualizar fontes após inserção
+      // Atualizar valores e fontes após inserção
+      values = sheet.getDataRange().getValues();
+      fontWeights = sheet.getDataRange().getFontWeights();
     }
   }
 
