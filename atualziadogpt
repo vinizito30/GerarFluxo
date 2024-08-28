@@ -30,7 +30,6 @@ function analisarEInserirLinha() {
   var colunaIniciar = intervaloIniciar.getColumn() - 1; // Ajustar para índice baseado em 0
   var linhaInicial = intervaloIniciar.getRow() + 2; // Começar 2 linhas abaixo do intervalo nomeado INICIAR
   var linhaParar = intervaloParar.getRow(); // Linha onde está o intervalo nomeado PARAR
-  var numLinhas = values.length;
 
   // Marcar o início do tempo
   var tempoInicio = new Date().getTime();
@@ -41,8 +40,9 @@ function analisarEInserirLinha() {
       continue; // Pular linhas ocultas ou filtradas
     }
 
+    // Atualizar os valores e fontes após possíveis alterações
     values = sheet.getDataRange().getValues();
-    fontWeights = sheet.getDataRange().getFontWeights(); // Atualiza a fonte após cada alteração
+    fontWeights = sheet.getDataRange().getFontWeights(); 
 
     // Verificar o valor da célula na coluna de referência
     var valorReferencia = values[linhaAtual - 1][colunaIniciar]; // Linha atual na coluna de referência
@@ -79,10 +79,8 @@ function analisarEInserirLinha() {
       }
 
       if (valorAtual !== valorReferencia) {
-        // Calcular a diferença
-        var diferenca = valorAtual - valorReferencia;
-        // Armazenar a diferença com a coluna correspondente
-        diferencas.push({ coluna: colunaAtual + 1, diferenca: diferenca });
+        // Armazenar coluna com valor diferente
+        diferencas.push(colunaAtual);
       }
 
       if (isNegrito) {
@@ -120,12 +118,15 @@ function analisarEInserirLinha() {
 
       // Adicionar diferenças calculadas se não encontrou 0
       if (!encontrouZero) {
-        diferencas.forEach(function(diferenca) {
-          novaLinhaValores[diferenca.coluna - 1] = diferenca.diferenca;
+        diferencas.forEach(function(colunaDiferenca) {
+          var valorAtual = values[linhaAtual - 1][colunaDiferenca];
+          // Garantir que o valor da célula nunca seja negativo
+          var valorDiferenca = Math.max(0, valorAtual - valorReferencia); // Subtrai e garante que o resultado não seja negativo
+          novaLinhaValores[colunaDiferenca] = valorDiferenca;
         });
 
         // Preencher células vazias com 0 até a célula anterior ao último número diferente
-        var ultimaColunaDiferenca = diferencas[diferencas.length - 1].coluna; // Última coluna preenchida
+        var ultimaColunaDiferenca = diferencas[diferencas.length - 1]; // Última coluna preenchida
         for (var i = 1; i < ultimaColunaDiferenca; i++) {
           if (novaLinhaValores[i] === '') {
             novaLinhaValores[i] = 0;
@@ -147,7 +148,23 @@ function analisarEInserirLinha() {
       }
 
       // Definir os valores da nova linha na planilha
-      sheet.getRange(novaLinha, 1, 1, novaLinhaValores.length).setValues([novaLinhaValores]);
+      var novaLinhaRange = sheet.getRange(novaLinha, 1, 1, novaLinhaValores.length);
+      novaLinhaRange.setValues([novaLinhaValores]);
+
+      // Definir a cor de fundo das células na nova linha
+      var novaLinhaBackgrounds = Array(values[0].length).fill(''); // Inicializar com cor de fundo padrão
+      diferencas.forEach(function(colunaDiferenca) {
+        novaLinhaBackgrounds[colunaDiferenca] = '#FFFF00'; // Amarelo para células com valor diferente
+      });
+      valoresNegrito.forEach(function(negrito) {
+        novaLinhaBackgrounds[negrito.coluna - 1] = '#FFFF00'; // Amarelo para células com negrito
+      });
+      novaLinhaRange.setBackgrounds([novaLinhaBackgrounds]);
+
+      // Recolocar o valor da célula de referência nas células com valor diferente
+      diferencas.forEach(function(colunaDiferenca) {
+        sheet.getRange(linhaAtual, colunaDiferenca + 1).setValue(valorReferencia);
+      });
 
       // Atualizar o número de linhas após a inserção
       numLinhas = sheet.getDataRange().getValues().length;
