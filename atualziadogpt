@@ -41,7 +41,6 @@ function analisarEInserirLinha() {
     }
 
     // Atualizar os valores e fontes após possíveis alterações
-    // Atualizar apenas após o loop principal
     values = sheet.getDataRange().getValues();
     fontWeights = sheet.getDataRange().getFontWeights(); 
 
@@ -70,22 +69,13 @@ function analisarEInserirLinha() {
         break;
       }
 
-      if (valorAtual === 0) {
-        encontrouZero = true;
-        // Armazenar a posição do 0
-        zeros.push(colunaAtual + 1);
-        // Copiar valores a partir do próximo item após o 0
-        valoresParaCopiar = values[linhaAtual - 1].slice(colunaAtual + 1);
-        break;
-      }
-
       if (valorAtual !== valorReferencia && !isNegrito) {
         // Armazenar coluna com valor diferente se não estiver em negrito
         diferencas.push(colunaAtual);
       }
 
-      if (isNegrito) {
-        // Armazenar valores negrito
+      if (isNegrito && valorAtual !== 0) {
+        // Armazenar valores negrito somente se não for 0
         valoresNegrito.push({ coluna: colunaAtual + 1, valor: valorAtual });
       }
       
@@ -93,7 +83,7 @@ function analisarEInserirLinha() {
     }
 
     // Inserir nova linha abaixo
-    if (diferencas.length > 0 || encontrouZero || valoresNegrito.length > 0) {
+    if (diferencas.length > 0  || valoresNegrito.length > 0) {
       sheet.insertRowAfter(linhaAtual);
       var novaLinha = linhaAtual + 1;
 
@@ -104,18 +94,6 @@ function analisarEInserirLinha() {
       // Preencher a nova linha com as diferenças, valores negrito e zeros
       var novaLinhaValores = Array(values[0].length).fill(''); // Inicializar com células vazias
       novaLinhaValores[0] = valorNovaLinha;
-
-      if (encontrouZero) {
-        // Adicionar zeros nas posições corretas
-        zeros.forEach(function(colunaZero) {
-          novaLinhaValores[colunaZero - 1] = 0;
-        });
-        
-        // Copiar valores diretamente após o 0
-        for (var i = 0; i < valoresParaCopiar.length; i++) {
-          novaLinhaValores[colunaAtual + i] = valoresParaCopiar[i];
-        }
-      }
 
       // Adicionar diferenças calculadas se não encontrou 0
       if (!encontrouZero) {
@@ -167,7 +145,9 @@ function analisarEInserirLinha() {
         novaLinhaBackgrounds[colunaDiferenca] = '#FFFF00'; // Amarelo para células com valor diferente
       });
       valoresNegrito.forEach(function(negrito) {
-        novaLinhaBackgrounds[negrito.coluna - 1] = '#FFFF00'; // Amarelo para células com negrito
+        if (negrito.valor !== 0) { // Aplicar cor amarela somente se o valor não for 0
+          novaLinhaBackgrounds[negrito.coluna - 1] = '#FFFF00'; // Amarelo para células com negrito
+        }
       });
       novaLinhaRange.setBackgrounds([novaLinhaBackgrounds]);
 
