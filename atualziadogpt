@@ -2,46 +2,79 @@ function analisarEInserirLinha() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var range = sheet.getDataRange();
   var values = range.getValues();
+  var fontWeights = range.getFontWeights(); // Adiciona a obtenção dos pesos das fontes
 
-  var colunaIniciar = -1;
-  var linhaInicial = 2; // Começa duas linhas abaixo da linha "INICIAR"
-  var linhaAtual = linhaInicial;
+  // Obtendo os intervalos nomeados
+  var namedRanges = SpreadsheetApp.getActiveSpreadsheet().getNamedRanges();
+  var intervaloIniciar, intervaloParar;
+
+  namedRanges.forEach(function(namedRange) {
+    if (namedRange.getName() === 'INICIAR') {
+      intervaloIniciar = namedRange.getRange();
+    } else if (namedRange.getName() === 'PARAR') {
+      intervaloParar = namedRange.getRange();
+    }
+  });
+
+  if (!intervaloIniciar) {
+    Browser.msgBox('Intervalo nomeado "INICIAR" não encontrado.');
+    return;
+  }
+
+  if (!intervaloParar) {
+    Browser.msgBox('Intervalo nomeado "PARAR" não encontrado.');
+    return;
+  }
+
+  // Obtendo a coluna de INICIAR e PARAR
+  var colunaIniciar = intervaloIniciar.getColumn() - 1; // Ajustar para índice baseado em 0
+  var linhaInicial = intervaloIniciar.getRow() + 2; // Começar 2 linhas abaixo do intervalo nomeado INICIAR
+  var linhaParar = intervaloParar.getRow(); // Linha onde está o intervalo nomeado PARAR
   var numLinhas = values.length;
 
   // Marcar o início do tempo
   var tempoInicio = new Date().getTime();
 
-  // Encontrar a coluna que contém a palavra "INICIAR" na linha 1
-  for (var i = 0; i < values[0].length; i++) {
-    if (values[0][i] === 'INICIAR') {
-      colunaIniciar = i;
-      break;
+  for (var linhaAtual = linhaInicial; linhaAtual <= linhaParar; linhaAtual++) {
+    // Verificar se a linha está oculta ou com altura 0
+    if (sheet.isRowHiddenByUser(linhaAtual) || sheet.isRowHiddenByFilter(linhaAtual)) {
+      continue; // Pular linhas ocultas ou filtradas
     }
-  }
-  
-  if (colunaIniciar === -1) {
-    Browser.msgBox('Palavra "INICIAR" não encontrada na linha 1.');
-    return;
-  }
 
-  while (linhaAtual < numLinhas) {
     values = sheet.getDataRange().getValues();
-    
-    if (values[linhaAtual][colunaIniciar] === 'PARAR') {
-      break; // Parar se encontrar "PARAR"
+    fontWeights = sheet.getDataRange().getFontWeights(); // Atualiza a fonte após cada alteração
+
+    // Verificar o valor da célula na coluna de referência
+    var valorReferencia = values[linhaAtual - 1][colunaIniciar]; // Linha atual na coluna de referência
+
+    if (valorReferencia === 0) {
+      continue; // Pular a análise se o valor de referência for 0
     }
 
-    var valorReferencia = values[linhaAtual][colunaIniciar];
     var colunaAtual = colunaIniciar + 1;
 
-    // Dicionário para armazenar as diferenças
+    // Dicionário para armazenar as diferenças, valores negrito e zeros
     var diferencas = [];
+    var valoresNegrito = [];
+    var zeros = [];
+    var encontrouZero = false;
+    var valoresParaCopiar = [];
 
-    while (colunaAtual < values[linhaAtual].length) {
-      var valorAtual = values[linhaAtual][colunaAtual];
+    while (colunaAtual < values[linhaAtual - 1].length) {
+      var valorAtual = values[linhaAtual - 1][colunaAtual];
+      var isNegrito = fontWeights[linhaAtual - 1][colunaAtual] === 'bold'; // Verifica se o texto está em negrito
       
       if (valorAtual === '') {
         // Parar se encontrar a primeira célula vazia
+        break;
+      }
+
+      if (valorAtual === 0) {
+        encontrouZero = true;
+        // Armazenar a posição do 0
+        zeros.push(colunaAtual + 1);
+        // Copiar valores a partir do próximo item após o 0
+        valoresParaCopiar = values[linhaAtual - 1].slice(colunaAtual + 1);
         break;
       }
 
@@ -51,40 +84,70 @@ function analisarEInserirLinha() {
         // Armazenar a diferença com a coluna correspondente
         diferencas.push({ coluna: colunaAtual + 1, diferenca: diferenca });
       }
+
+      if (isNegrito) {
+        // Armazenar valores negrito
+        valoresNegrito.push({ coluna: colunaAtual + 1, valor: valorAtual });
+      }
       
       colunaAtual++; // Mover para a próxima coluna
     }
 
-    if (diferencas.length > 0) {
-      // Inserir nova linha abaixo
-      sheet.insertRowAfter(linhaAtual + 1);
-      var novaLinha = linhaAtual + 2;
-
-      // Obter o valor da célula na primeira coluna da linha original
-      var valorPrimeiraColuna = values[linhaAtual][0];
+    // Inserir nova linha abaixo
+    if (diferencas.length > 0 || encontrouZero || valoresNegrito.length > 0) {
+      sheet.insertRowAfter(linhaAtual);
+      var novaLinha = linhaAtual + 1;
 
       // Adicionar o sufixo _1 ao valor da primeira coluna
+      var valorPrimeiraColuna = values[linhaAtual - 1][0];
       var valorNovaLinha = valorPrimeiraColuna + '_1';
       
-      // Preencher a nova linha com as diferenças
-      sheet.getRange(novaLinha, 1).setValue(valorNovaLinha);
-      diferencas.forEach(function(diferenca) {
-        sheet.getRange(novaLinha, diferenca.coluna).setValue(diferenca.diferenca);
+      // Preencher a nova linha com as diferenças, valores negrito e zeros
+      var novaLinhaValores = Array(values[0].length).fill(''); // Inicializar com células vazias
+      novaLinhaValores[0] = valorNovaLinha;
+
+      if (encontrouZero) {
+        // Adicionar zeros nas posições corretas
+        zeros.forEach(function(colunaZero) {
+          novaLinhaValores[colunaZero - 1] = 0;
+        });
+        
+        // Copiar valores diretamente após o 0
+        for (var i = 0; i < valoresParaCopiar.length; i++) {
+          novaLinhaValores[colunaAtual + i] = valoresParaCopiar[i];
+        }
+      }
+
+      // Adicionar diferenças calculadas se não encontrou 0
+      if (!encontrouZero) {
+        diferencas.forEach(function(diferenca) {
+          novaLinhaValores[diferenca.coluna - 1] = diferenca.diferenca;
+        });
+
+        // Preencher células vazias com 0 até a célula anterior ao último número diferente
+        var ultimaColunaDiferenca = diferencas[diferencas.length - 1].coluna; // Última coluna preenchida
+        for (var i = 1; i < ultimaColunaDiferenca; i++) {
+          if (novaLinhaValores[i] === '') {
+            novaLinhaValores[i] = 0;
+          }
+        }
+      }
+
+      // Adicionar valores negrito sem subtração
+      valoresNegrito.forEach(function(negrito) {
+        novaLinhaValores[negrito.coluna - 1] = negrito.valor;
       });
 
       // Copiar valores das colunas 2 até a 112 da linha atual para a nova linha
       for (var col = 1; col <= 112; col++) {
-        var valor = values[linhaAtual][col];
-        sheet.getRange(novaLinha, col + 1).setValue(valor);
-      }
-
-      // Preencher células vazias com 0 até a célula anterior ao último número diferente
-      var ultimaColunaDiferenca = diferencas[diferencas.length - 1].coluna; // Última coluna preenchida
-      for (var i = 1; i < ultimaColunaDiferenca; i++) {
-        if (sheet.getRange(novaLinha, i + 1).getValue() === '') {
-          sheet.getRange(novaLinha, i + 1).setValue(0);
+        var valor = values[linhaAtual - 1][col];
+        if (valor !== undefined) { // Verificar se o valor não é undefined
+          novaLinhaValores[col] = valor;
         }
       }
+
+      // Definir os valores da nova linha na planilha
+      sheet.getRange(novaLinha, 1, 1, novaLinhaValores.length).setValues([novaLinhaValores]);
 
       // Atualizar o número de linhas após a inserção
       numLinhas = sheet.getDataRange().getValues().length;
@@ -92,24 +155,24 @@ function analisarEInserirLinha() {
       // Atualizar a linha atual e os valores
       linhaAtual++;
       values = sheet.getDataRange().getValues(); // Atualizar valores após inserção
+      fontWeights = sheet.getDataRange().getFontWeights(); // Atualizar fontes após inserção
     }
-
-    linhaAtual++; // Avançar para a próxima linha
   }
 
   // Marcar o fim do tempo
   var tempoFim = new Date().getTime();
   var tempoExecucao = (tempoFim - tempoInicio) / 1000; // Tempo em segundos
   var minutos = Math.floor(tempoExecucao / 60);
-  var segundos = (tempoExecucao % 60).toFixed(2);
+  var segundos = Math.round(tempoExecucao % 60); // Apenas segundos arredondados
 
-   var htmlOutput = HtmlService.createHtmlOutput(
+  // Criar o HTML com a mensagem e o tempo de execução
+  var htmlOutput = HtmlService.createHtmlOutput(
     '<html>' +
     '<head><base target="_top">' +
     '<style>' +
     'body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }' +
     '.container { display: flex; flex-direction: column; align-items: center; justify-content: center; }' +
-    '.image { width: 100px; margin-bottom: 10px; }' +
+    '.image { width: 300px; margin-bottom: 30px; }' +
     '.message { font-size: 16px; margin-bottom: 10px; }' +
     '.time { font-size: 14px; color: #555; margin-bottom: 20px; }' +
     '.button { background-color: #a9a9a9; color: black; border: none; padding: 15px 32px; text-align: center; text-decoration: none; display: inline-block; font-size: 16px; margin: 4px 2px; cursor: pointer; border-radius: 5px; }' +
