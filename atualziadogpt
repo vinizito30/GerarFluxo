@@ -56,9 +56,6 @@ function analisarEInserirLinha() {
     // Dicionário para armazenar as diferenças, valores negrito e zeros
     var diferencas = [];
     var valoresNegrito = [];
-    var zeros = [];
-    var encontrouZero = false;
-    var valoresParaCopiar = [];
 
     while (colunaAtual < values[linhaAtual - 1].length) {
       var valorAtual = values[linhaAtual - 1][colunaAtual];
@@ -74,8 +71,8 @@ function analisarEInserirLinha() {
         diferencas.push(colunaAtual);
       }
 
-      if (isNegrito && valorAtual !== 0) {
-        // Armazenar valores negrito somente se não for 0
+      if (isNegrito) {
+        // Armazenar valores negrito
         valoresNegrito.push({ coluna: colunaAtual + 1, valor: valorAtual });
       }
       
@@ -83,7 +80,7 @@ function analisarEInserirLinha() {
     }
 
     // Inserir nova linha abaixo
-    if (diferencas.length > 0  || valoresNegrito.length > 0) {
+    if (diferencas.length > 0 || valoresNegrito.length > 0) {
       sheet.insertRowAfter(linhaAtual);
       var novaLinha = linhaAtual + 1;
 
@@ -91,33 +88,38 @@ function analisarEInserirLinha() {
       var valorPrimeiraColuna = values[linhaAtual - 1][0];
       var valorNovaLinha = valorPrimeiraColuna + '_1';
       
-      // Preencher a nova linha com as diferenças, valores negrito e zeros
+      // Preencher a nova linha com as diferenças e valores negrito
       var novaLinhaValores = Array(values[0].length).fill(''); // Inicializar com células vazias
       novaLinhaValores[0] = valorNovaLinha;
 
-      // Adicionar diferenças calculadas se não encontrou 0
-      if (!encontrouZero) {
-        diferencas.forEach(function(colunaDiferenca) {
-          var valorAtual = values[linhaAtual - 1][colunaDiferenca];
-          // Garantir que o valor da célula nunca seja negativo
-          var valorDiferenca = Math.max(0, valorAtual - valorReferencia); // Subtrai e garante que o resultado não seja negativo
-          novaLinhaValores[colunaDiferenca] = valorDiferenca;
-        });
+      // Adicionar diferenças calculadas
+      diferencas.forEach(function(colunaDiferenca) {
+        var valorAtual = values[linhaAtual - 1][colunaDiferenca];
+        // Garantir que o valor da célula nunca seja negativo
+        var valorDiferenca = Math.max(0, valorAtual - valorReferencia); // Subtrai e garante que o resultado não seja negativo
+        novaLinhaValores[colunaDiferenca] = valorDiferenca;
+      });
 
-        // Preencher células vazias com 0 até a célula anterior ao último número diferente
-        var ultimaColunaDiferenca = diferencas[diferencas.length - 1]; // Última coluna preenchida
-        for (var i = 1; i < ultimaColunaDiferenca; i++) {
-          if (novaLinhaValores[i] === '') {
-            novaLinhaValores[i] = 0;
-          }
+      // Preencher células vazias com 0 até a célula anterior ao último número diferente
+      var ultimaColunaDiferenca = diferencas.length > 0 ? diferencas[diferencas.length - 1] : -1;
+      for (var i = 1; i < ultimaColunaDiferenca; i++) {
+        if (novaLinhaValores[i] === '') {
+          novaLinhaValores[i] = 0;
         }
       }
 
       // Adicionar valores negrito na nova linha e limpar os valores originais
+      var novaLinhaBackgrounds = Array(values[0].length).fill(''); // Inicializar com cor de fundo padrão
+
       valoresNegrito.forEach(function(negrito) {
+        // Adicionar valor negrito à nova linha
         novaLinhaValores[negrito.coluna - 1] = negrito.valor;
         // Limpar a célula original
         sheet.getRange(linhaAtual, negrito.coluna).setValue('');
+        // Marcar com cor amarela se o valor não for 0
+        if (negrito.valor !== 0) {
+          novaLinhaBackgrounds[negrito.coluna - 1] = '#FFFF00'; // Amarelo para células com negrito (não zero)
+        }
       });
 
       // Preencher com 0 entre o último valor diferente e os valores negrito
@@ -140,15 +142,6 @@ function analisarEInserirLinha() {
       novaLinhaRange.setValues([novaLinhaValores]);
 
       // Definir a cor de fundo das células na nova linha
-      var novaLinhaBackgrounds = Array(values[0].length).fill(''); // Inicializar com cor de fundo padrão
-      diferencas.forEach(function(colunaDiferenca) {
-        novaLinhaBackgrounds[colunaDiferenca] = '#FFFF00'; // Amarelo para células com valor diferente
-      });
-      valoresNegrito.forEach(function(negrito) {
-        if (negrito.valor !== 0) { // Aplicar cor amarela somente se o valor não for 0
-          novaLinhaBackgrounds[negrito.coluna - 1] = '#FFFF00'; // Amarelo para células com negrito
-        }
-      });
       novaLinhaRange.setBackgrounds([novaLinhaBackgrounds]);
 
       // Recolocar o valor da célula de referência nas células com valor diferente, mas não para células em negrito
