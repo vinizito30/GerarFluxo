@@ -1,0 +1,77 @@
+function analisarEInserirLinha() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var range = sheet.getDataRange();
+  var values = range.getValues();
+  
+  var colunaIniciar = -1;
+  var linhaInicial = 2; // Começa duas linhas abaixo da linha "INICIAR"
+  var linhaAtual = linhaInicial;
+  var numLinhas = values.length;
+
+  // Encontrar a coluna que contém a palavra "INICIAR" na linha 1
+  for (var i = 0; i < values[0].length; i++) {
+    if (values[0][i] === 'INICIAR') {
+      colunaIniciar = i;
+      break;
+    }
+  }
+  
+  if (colunaIniciar === -1) {
+    Logger.log('Palavra "INICIAR" não encontrada na linha 1.');
+    return;
+  }
+
+  while (linhaAtual < numLinhas) {
+    values = sheet.getDataRange().getValues();
+    
+    if (values[linhaAtual][colunaIniciar] === 'PARAR') {
+      break; // Parar se encontrar "PARAR"
+    }
+
+    var valorReferencia = values[linhaAtual][colunaIniciar];
+    var colunaAtual = colunaIniciar + 1;
+
+    // Dicionário para armazenar as diferenças
+    var diferencas = [];
+
+    while (colunaAtual < values[linhaAtual].length) {
+      var valorAtual = values[linhaAtual][colunaAtual];
+      
+      if (valorAtual === '') {
+        // Parar se encontrar a primeira célula vazia
+        break;
+      }
+
+      if (valorAtual !== valorReferencia) {
+        // Calcular a diferença
+        var diferenca = valorAtual - valorReferencia;
+        // Armazenar a diferença com a coluna correspondente
+        diferencas.push({ coluna: colunaAtual + 1, diferenca: diferenca });
+      }
+      
+      colunaAtual++; // Mover para a próxima coluna
+    }
+
+    if (diferencas.length > 0) {
+      // Inserir nova linha abaixo
+      sheet.insertRowAfter(linhaAtual + 1);
+      var novaLinha = linhaAtual + 2;
+
+      // Preencher a nova linha com as diferenças
+      diferencas.forEach(function(diferenca) {
+        sheet.getRange(novaLinha, diferenca.coluna).setValue(diferenca.diferenca);
+      });
+
+      // Atualizar o número de linhas após a inserção
+      numLinhas = sheet.getDataRange().getValues().length;
+      
+      // Atualizar a linha atual e os valores
+      linhaAtual++;
+      values = sheet.getDataRange().getValues(); // Atualizar valores após inserção
+    }
+
+    linhaAtual++; // Avançar para a próxima linha
+  }
+  
+  Logger.log('Processo concluído.');
+}
