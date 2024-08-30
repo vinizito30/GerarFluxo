@@ -8,7 +8,7 @@ function analisarEInserirLinha() {
   Logger.log('Obtendo intervalos nomeados...');
   var namedRanges = SpreadsheetApp.getActiveSpreadsheet().getNamedRanges();
   var intervalos = {};
-  
+
   // Mapeia os intervalos nomeados para um objeto
   namedRanges.forEach(function(namedRange) {
     intervalos[namedRange.getName()] = namedRange.getRange();
@@ -48,8 +48,12 @@ function analisarEInserirLinha() {
     var colunaAtual = colunaIniciar + 1;
     var primeiraColunaNegrito = -1;
     var ultimaColunaDiferenca = -1;
+    var ultimaColunaNegrito = -1;
+    var primeiraColunaZero = -1;
+    var ultimaColunaZero = -1;
     var diferencas = [];
     var valoresNegrito = [];
+    var sequenciasZeros = [];
     var backgroundsNovaLinha = Array(numColunas).fill(''); // Cores de fundo para a nova linha
 
     while (colunaAtual < values[linhaAtual - 1].length) {
@@ -60,6 +64,21 @@ function analisarEInserirLinha() {
       if (valorAtual === '') {
         Logger.log('Encontrada célula vazia na coluna ' + (colunaAtual + 1) + '. Parando.');
         break;
+      }
+
+      if (valorAtual === 0) {
+        if (primeiraColunaZero === -1) {
+          primeiraColunaZero = colunaAtual; // Registra a primeira coluna com 0
+        }
+        ultimaColunaZero = colunaAtual; // Atualiza a última coluna com 0
+        sequenciasZeros.push(colunaAtual);
+        Logger.log('Valor 0 encontrado na coluna ' + (colunaAtual + 1) + '.');
+        // Captura todos os valores seguintes até a próxima célula vazia
+        while (colunaAtual < values[linhaAtual - 1].length && values[linhaAtual - 1][colunaAtual] !== '') {
+          sequenciasZeros.push(colunaAtual);
+          colunaAtual++;
+        }
+        break; // Sai do loop para processar a sequência de zeros
       }
 
       if (valorAtual !== valorReferencia && !isNegrito) {
@@ -73,13 +92,14 @@ function analisarEInserirLinha() {
         if (primeiraColunaNegrito === -1) {
           primeiraColunaNegrito = colunaAtual;
         }
+        ultimaColunaNegrito = colunaAtual;
         Logger.log('Valor em negrito encontrado na coluna ' + (colunaAtual + 1) + ': ' + valorAtual);
       }
 
       colunaAtual++;
     }
 
-    if (diferencas.length > 0 || valoresNegrito.length > 0) {
+    if (diferencas.length > 0 || valoresNegrito.length > 0 || sequenciasZeros.length > 0) {
       Logger.log('Preparando dados para nova linha abaixo da linha ' + linhaAtual);
       var novaLinha = Array(numColunas).fill('');
       novaLinha[0] = values[linhaAtual - 1][0] + '_1';
@@ -95,6 +115,13 @@ function analisarEInserirLinha() {
         }
       }
 
+      // Adiciona valores de sequência de zeros
+      sequenciasZeros.forEach(function(col) {
+        novaLinha[col] = values[linhaAtual - 1][col];
+        backgroundsNovaLinha[col] = '#FFFF00'; // Cor de fundo amarelo para valores da sequência de zeros
+        Logger.log('Adicionando valor da sequência de zeros na coluna ' + (col + 1) + ': ' + values[linhaAtual - 1][col]);
+      });
+
       // Adiciona valores negrito
       valoresNegrito.forEach(function(negrito) {
         novaLinha[negrito.coluna - 1] = negrito.valor;
@@ -104,12 +131,16 @@ function analisarEInserirLinha() {
         Logger.log('Valor negrito adicionado na coluna ' + negrito.coluna + ': ' + negrito.valor);
       });
 
-            // Atualiza a célula original com o valor da célula de referência
-      sheet.getRange(linhaAtual, colunaIniciar + 1).setValue(valorReferencia);
+      // Determina a última coluna significativa
+      var ultimaColunaSignificativa = Math.max(
+        ultimaColunaNegrito, 
+        ultimaColunaDiferenca, 
+        ultimaColunaZero
+      );
 
-      // Preencher com 0 entre a célula de referência e a última coluna com valor inserido
-      for (var col = colunaIniciar; col <= ultimaColunaDiferenca; col++) {
-        if (novaLinha[col] === '') {
+      // Preencher com 0 entre a célula de referência e a coluna anterior à primeira coluna com valor 0
+      for (var col = colunaIniciar; col <= ultimaColunaSignificativa; col++) {
+        if (novaLinha[col] === '' && col < primeiraColunaZero) {
           novaLinha[col] = 0; // Adiciona 0 nas células vazias
           // Não altera a cor de fundo para 0
           Logger.log('Adicionando 0 na coluna ' + (col + 1));
@@ -122,6 +153,31 @@ function analisarEInserirLinha() {
       novaLinhaRange.setValues([novaLinha]);
       novaLinhaRange.setBackgrounds([backgroundsNovaLinha]);
 
+      // Atualiza o valor da célula original com o valor de referência
+      for (var i = colunaIniciar; i <= ultimaColunaSignificativa; i++) {
+        if (values[linhaAtual - 1][i] !== valorReferencia) {
+          var originalCell = sheet.getRange(linhaAtual, i + 1);
+          originalCell.setValue(valorReferencia);
+          originalCell.setBackground(''); // Limpa a cor de fundo da célula original
+          Logger.log('Atualizando valor da célula original na coluna ' + (i + 1) + ' para o valor de referência: ' + valorReferencia);
+        }
+      }
+
+      // Apaga o valor das células originais onde tinha o negrito
+      valoresNegrito.forEach(function(negrito) {
+        var cell = sheet.getRange(linhaAtual, negrito.coluna);
+        cell.setValue(''); // Limpa o valor original
+        cell.setBackground(''); // Limpa a cor de fundo da célula original
+        Logger.log('Valor em negrito na coluna ' + negrito.coluna + ' removido da linha original.');
+      });
+
+      // Limpa os valores após a sequência de zeros
+      sequenciasZeros.forEach(function(col) {
+        var cell = sheet.getRange(linhaAtual, col + 1);
+        cell.setValue(''); // Limpa o valor original
+        cell.setBackground(''); // Limpa a cor de fundo da célula original
+        Logger.log('Valor após o 0 na coluna ' + (col + 1) + ' removido da linha original.');
+      });
     }
   }
 
