@@ -1,4 +1,4 @@
-function analisarEInserirLinha() {
+function qGerarFluxoFinanceiro() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var range = sheet.getDataRange();
   var values = range.getValues();
@@ -56,7 +56,9 @@ function analisarEInserirLinha() {
     var sequenciasZeros = [];
     var backgroundsNovaLinha = Array(numColunas).fill(''); // Cores de fundo para a nova linha
     var ultimoValorColuna = -1; // Armazena a coluna do último valor inserido
+    var ultimaColunaPreenchidaNova = -1; // Armazena a última coluna preenchida na nova linha
 
+    // Armazena todos os números da linha original e determina a última coluna preenchida
     while (colunaAtual < values[linhaAtual - 1].length) {
       var valorAtual = values[linhaAtual - 1][colunaAtual];
       var isNegrito = fontWeights[linhaAtual - 1][colunaAtual] === 'bold';
@@ -121,35 +123,46 @@ function analisarEInserirLinha() {
       // Adiciona valores de sequência de zeros
       sequenciasZeros.forEach(function(col) {
         novaLinha[col] = values[linhaAtual - 1][col];
-        backgroundsNovaLinha[col] = '#FFFF00'; // Cor de fundo amarelo para valores da sequência de zeros
+        backgroundsNovaLinha[col] = '#FFFF00'; // Cor de fundo amarelo para valores zero
         Logger.log('Adicionando valor da sequência de zeros na coluna ' + (col + 1) + ': ' + values[linhaAtual - 1][col]);
       });
 
       // Adiciona valores negrito
       valoresNegrito.forEach(function(negrito) {
         novaLinha[negrito.coluna - 1] = negrito.valor;
-        if (negrito.valor !== 0) {
-          backgroundsNovaLinha[negrito.coluna - 1] = '#FFFF00'; // Cor de fundo amarelo para valores negrito
-        }
+        backgroundsNovaLinha[negrito.coluna - 1] = '#FFFF00'; // Cor de fundo amarelo para valores negrito
         Logger.log('Valor negrito adicionado na coluna ' + negrito.coluna + ': ' + negrito.valor);
       });
-
-      // Preenche células vazias entre a célula de referência e o último valor significativo com 0
-      if (ultimoValorColuna > colunaIniciar) {
-        for (var i = colunaIniciar; i < ultimoValorColuna; i++) {
-          if (novaLinha[i] === '') { // Verifica se a célula está vazia na nova linha
-            novaLinha[i] = 0;
-            backgroundsNovaLinha[i] = '#FFFF00'; // Cor de fundo amarelo para as células preenchidas com 0
-            Logger.log('Preenchendo célula vazia na coluna ' + (i + 1) + ' com 0.');
-          }
-        }
-      }
 
       // Insere uma nova linha e define os valores e cores de fundo imediatamente
       sheet.insertRowAfter(linhaAtual);
       var novaLinhaRange = sheet.getRange(linhaAtual + 1, 1, 1, numColunas);
       novaLinhaRange.setValues([novaLinha]);
       novaLinhaRange.setBackgrounds([backgroundsNovaLinha]);
+
+      // Determina a última coluna preenchida na nova linha
+      ultimaColunaPreenchidaNova = novaLinha.reduce(function(maxCol, value, index) {
+        return (value !== '' && value !== 0) ? Math.max(maxCol, index) : maxCol;
+      }, -1);
+
+      // Preenche com zeros na nova linha da coluna de referência até a última coluna preenchida na nova linha
+      if (ultimaColunaPreenchidaNova >= 0) {
+        for (var k = colunaIniciar; k <= ultimaColunaPreenchidaNova; k++) {
+          if (novaLinha[k] === '') {
+            novaLinha[k] = 0;
+            Logger.log('Adicionando 0 na coluna ' + (k + 1));
+          }
+        }
+      }
+
+      // Atualiza a nova linha com zeros e valores
+      novaLinhaRange.setValues([novaLinha]);
+      novaLinhaRange.setBackgrounds([backgroundsNovaLinha]);
+
+      // Copia a formatação da coluna 2 até a coluna 121 da linha original para a nova linha
+      var intervaloOrigem = sheet.getRange(linhaAtual, 2, 1, 121); // Linha original da coluna 2 até a coluna 121
+      var intervaloDestino = sheet.getRange(linhaAtual + 1, 2, 1, 121); // Nova linha da coluna 2 até a coluna 121
+      intervaloOrigem.copyTo(intervaloDestino, { contentsOnly: false }); // Copia tudo, incluindo o conteúdo e a formatação
 
       // Atualiza o valor da célula original com o valor de referência
       for (var i = colunaIniciar; i <= (ultimaColunaDiferenca >= 0 ? ultimaColunaDiferenca : ultimoValorColuna); i++) {
