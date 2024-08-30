@@ -1,0 +1,33 @@
+function inputGanho() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Input Ganho");
+  var startCell = sheet.getRange("N4");
+  var currentCell = startCell;
+  var goalValue = 0;
+  
+  while (currentCell.getValue() !== '') {
+    var targetCell = currentCell.offset(0, -1); // Célula na coluna M
+    var currentValue = currentCell.getValue();
+    var currentTargetValue = targetCell.getValue();
+    
+    if (currentTargetValue !== goalValue) {
+      // Implementar uma abordagem básica de Goal Seek
+      // Ajustar o valor da célula ativa para que a célula adjacente atinja o valor objetivo
+      var tolerance = 0.01; // Tolerância para o valor objetivo
+      var step = 0.01; // Passo de ajuste
+
+      // Iterativamente ajustar o valor até atingir o objetivo
+      while (Math.abs(currentTargetValue - goalValue) > tolerance) {
+        currentValue += step;
+        currentCell.setValue(currentValue);
+        SpreadsheetApp.flush(); // Garantir que a mudança seja aplicada
+        currentTargetValue = targetCell.getValue();
+      }
+      
+      // Ajusta o valor para ficar próximo ao valor objetivo
+      currentCell.setValue(currentValue - (currentTargetValue - goalValue));
+    }
+    
+    // Move para a próxima célula na coluna N
+    currentCell = currentCell.offset(1, 0);
+  }
+}
