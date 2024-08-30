@@ -30,10 +30,24 @@ Sub GerarFluxo()
     Dim variacao As Double
     Dim primeiraCelulaVazia As Boolean
     Dim encontrouZero As Boolean
+    Dim encontrouNegrito As Boolean
     Dim limiteColunaAnalise As Long
+    Dim ultimaColunaPreenchida As Long
+    Dim ultimaColunaNovaLinha As Long
     Dim linha As Variant
-
+    Dim dados As Variant
+    Dim dadosNovaLinha As Variant
+    Dim ultimaCelulaComValorRelevante As Long
+    Dim celulaTexto As Range
+    Dim ultimaLinhaPreenchida As Long
+    Dim contagemLinhasInseridas As Long
+    Dim linhaParaRegistro As Long
+    Dim ultimaCelulaFormula As Range
+    
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
     Application.DisplayAlerts = False
+    
     Set ws = ActiveSheet
     corPintura = RGB(255, 255, 0)
     Set contador = CreateObject("Scripting.Dictionary")
@@ -46,42 +60,47 @@ Sub GerarFluxo()
     Next i
     
     limiteHorizontal = ws.Columns.Count
-    variacao = 700
+    variacao = 100
     tempoInicio = Timer
-
+    
     Set celulaIniciar = ws.Cells.Find(What:="INICIAR", LookIn:=xlValues, LookAt:=xlWhole)
     
     If celulaIniciar Is Nothing Then
         MsgBox "Texto 'INICIAR' não encontrado na planilha.", vbExclamation, "Erro"
         Application.DisplayAlerts = True
+        Application.ScreenUpdating = True
+        Application.Calculation = xlCalculationAutomatic
         Exit Sub
     End If
-
+    
     colunaInicial = celulaIniciar.Column
     linhaAtual = celulaIniciar.Row + 2
     textoEncontrado = False
-
+    
     ultimaLinha = ws.Cells(ws.Rows.Count, colunaInicial).End(xlUp).Row
-
+    
+    ' Inicializar a contagem de linhas inseridas
+    contagemLinhasInseridas = 0
+    
     Do While linhaAtual <= ultimaLinha
         If ws.Rows(linhaAtual).Hidden Then
             linhaAtual = linhaAtual + 1
             GoTo ProximaLinha
         End If
-
+        
         valorPrimeiro = ws.Cells(linhaAtual, colunaInicial).Value
-
+        
         If VarType(valorPrimeiro) = vbString And UCase(Trim(valorPrimeiro)) = "PARAR" Then
             limiteHorizontal = ws.Cells(linhaAtual, ws.Columns.Count).End(xlToLeft).Column
             textoEncontrado = True
             Exit Do
         End If
-
+        
         If IsNumeric(valorPrimeiro) And CDbl(valorPrimeiro) = 0 Then
             linhaAtual = linhaAtual + 1
             GoTo ProximaLinha
         End If
-
+        
         nomeCliente = CStr(ws.Cells(linhaAtual, 1).Value)
         Set valoresDiferentes = CreateObject("Scripting.Dictionary")
         ultimaColunaComValor = colunaInicial
@@ -89,16 +108,21 @@ Sub GerarFluxo()
         valorComparacao = ws.Cells(linhaAtual, colunaInicial).Value
         primeiraCelulaVazia = False
         encontrouZero = False
+        encontrouNegrito = False
         limiteColunaAnalise = limiteHorizontal
+        ultimaCelulaComValorRelevante = 0
+        
+        ' Ler dados da linha atual em um array
+        dados = ws.Range(ws.Cells(linhaAtual, colunaInicial), ws.Cells(linhaAtual, limiteHorizontal)).Value
         
         For colunaAtual = colunaInicial To limiteHorizontal
-            valorCelula = ws.Cells(linhaAtual, colunaAtual).Value
-
+            valorCelula = dados(1, colunaAtual - colunaInicial + 1)
+            
             If IsEmpty(valorCelula) Or valorCelula = "" Then
                 primeiraCelulaVazia = True
                 Exit For
             End If
-
+            
             If IsNumeric(valorCelula) Then
                 If CDbl(valorCelula) = 0 Then
                     encontrouZero = True
@@ -120,26 +144,51 @@ Sub GerarFluxo()
                     End If
                 End If
             End If
+            
+            ' Verificar se o valor da célula está em negrito
+            If ws.Cells(linhaAtual, colunaAtual).Font.Bold Then
+                encontrouNegrito = True
+                limiteColunaAnalise = colunaAtual - 1 ' Definir a coluna limite para análise
+                Exit For
+            End If
+            
+            If Not IsEmpty(ws.Cells(linhaAtual, colunaAtual)) Then
+                ultimaCelulaComValorRelevante = colunaAtual
+            End If
+            
         Next colunaAtual
-
-        If Not todosIguais Then
+        
+        If Not todosIguais Or encontrouZero Or encontrouNegrito Then
             novaLinhaInserida = True
             ws.Rows(linhaAtual + 1).Insert Shift:=xlDown
-
+            
             ' Copiar valores diferentes para a nova linha
             For Each colunaDiferente In valoresDiferentes.Keys
                 ws.Cells(linhaAtual + 1, colunaDiferente).Value = valoresDiferentes(colunaDiferente)
                 ws.Cells(linhaAtual + 1, colunaDiferente).Interior.Color = corPintura
             Next colunaDiferente
-
-            ' Copiar valores após o 0 para a nova linha e apagar da célula original
+            
+            ' Ler dados da linha original em um array
+            dadosNovaLinha = ws.Range(ws.Cells(linhaAtual, colunaInicial), ws.Cells(linhaAtual, limiteHorizontal)).Value
+            
+            ' Copiar valores após o 0 ou valores em negrito para a nova linha e deixar a célula original em branco
+            ultimaColunaPreenchida = limiteColunaAnalise ' Identifica a última coluna com valor relevante
             For colunaAtual = limiteColunaAnalise + 1 To limiteHorizontal
-                If Not IsEmpty(ws.Cells(linhaAtual, colunaAtual).Value) Then
+                If Not IsEmpty(dadosNovaLinha(1, colunaAtual - colunaInicial + 1)) Then
+                    ' Copia o valor para a nova linha e deixa a célula original em branco, incluindo zeros
                     ws.Cells(linhaAtual + 1, colunaAtual).Value = ws.Cells(linhaAtual, colunaAtual).Value
-                    ws.Cells(linhaAtual, colunaAtual).ClearContents  ' Limpa o valor da célula original
+                    ws.Cells(linhaAtual, colunaAtual).ClearContents
                 End If
             Next colunaAtual
-
+            
+            ' Atualizar as células originais com o valor da célula de referência
+            ' Apenas se não for negrito
+            For colunaAtual = colunaInicial To limiteHorizontal
+                If valoresDiferentes.Exists(colunaAtual) And Not ws.Cells(linhaAtual, colunaAtual).Font.Bold Then
+                    ws.Cells(linhaAtual, colunaAtual).Value = valorComparacao
+                End If
+            Next colunaAtual
+            
             ' Atualiza o nome do cliente na nova linha
             If contador.Exists(nomeCliente) Then
                 contador(nomeCliente) = contador(nomeCliente) + 1
@@ -147,62 +196,147 @@ Sub GerarFluxo()
                 contador.Add nomeCliente, 1
             End If
             ws.Cells(linhaAtual + 1, 1).Value = nomeCliente & "_" & contador(nomeCliente)
-
+            
             ' Copiar fórmulas e colar especial
             For i = LBound(colunasAdicionais) To UBound(colunasAdicionais)
                 ws.Cells(linhaAtual, colunasAdicionais(i)).Copy
                 ws.Cells(linhaAtual + 1, colunasAdicionais(i)).PasteSpecial Paste:=xlPasteFormulas
-                ws.Cells(linhaAtual + 1, colunasAdicionais(i)).Interior.Color = _
-                    ws.Cells(linhaAtual, colunasAdicionais(i)).Interior.Color
+                ws.Cells(linhaAtual + 1, colunasAdicionais(i)).PasteSpecial Paste:=xlPasteFormats
             Next i
-
-            ' Limpar a área de transferência
-            Application.CutCopyMode = False
-
+            
             ' Garantir que a nova linha não tenha células vazias, preenchendo com 0 se necessário
-            For colunaAtual = colunaInicial To ws.Cells(linhaAtual + 1, ws.Columns.Count).End(xlToLeft).Column
+            ultimaColunaNovaLinha = ws.Cells(linhaAtual + 1, ws.Columns.Count).End(xlToLeft).Column
+            For colunaAtual = colunaInicial To ultimaColunaNovaLinha
                 If IsEmpty(ws.Cells(linhaAtual + 1, colunaAtual).Value) Then
-                    ws.Cells(linhaAtual + 1, colunaAtual).Value = 0
+                    ' Só inserir 0 se a coluna estiver antes da última célula com valor relevante
+                    If colunaAtual <= ultimaCelulaComValorRelevante Then
+                        ws.Cells(linhaAtual + 1, colunaAtual).Value = 0
+                    End If
                 End If
             Next colunaAtual
-
+            
             ' Marcar a linha original como atualizada
             linhaOriginalAtualizada(linhaAtual) = True
             ultimaLinha = ultimaLinha + 1
             linhaAtual = linhaAtual + 1
+            
+            ' Incrementar a contagem de linhas inseridas
+            contagemLinhasInseridas = contagemLinhasInseridas + 1
         Else
             linhaAtual = linhaAtual + 1
         End If
-
+        
 ProximaLinha:
         DoEvents
     Loop
-
-    ' Ajustar as linhas originais
-    For Each linha In linhaOriginalAtualizada.Keys
-        valorPrimeiro = ws.Cells(linha, colunaInicial).Value
-        For colunaAtual = colunaInicial To ws.Cells(linha, ws.Columns.Count).End(xlToLeft).Column
-            ' Manter o valor original na linha se estiver dentro da faixa de variação e antes do 0
-            If IsNumeric(ws.Cells(linha, colunaAtual).Value) And _
-               ws.Cells(linha, colunaAtual).Value <> valorPrimeiro Then
-                If ws.Cells(linha, colunaAtual).Value <> 0 And colunaAtual <= limiteColunaAnalise Then
-                    If Not (IsNumeric(valorPrimeiro) And _
-                            CDbl(ws.Cells(linha, colunaAtual).Value) >= CDbl(valorPrimeiro) - variacao And _
-                            CDbl(ws.Cells(linha, colunaAtual).Value) <= CDbl(valorPrimeiro) + variacao) Then
-                        ws.Cells(linha, colunaAtual).Value = valorPrimeiro
-                    End If
-                End If
-            End If
-        Next colunaAtual
-    Next linha
-
-    Application.DisplayAlerts = True
+    
+    ' Registrar a contagem de linhas inseridas para "Data Base Cessão"
+    Set celulaTexto = ws.Cells.Find(What:="Data Base Cessão", LookIn:=xlValues, LookAt:=xlWhole)
+    
+    If Not celulaTexto Is Nothing Then
+        ultimaLinhaPreenchida = ws.Cells(ws.Rows.Count, celulaTexto.Column).End(xlUp).Row
+        linhaParaRegistro = ultimaLinhaPreenchida + 1
+        
+        For i = 1 To contagemLinhasInseridas
+            ws.Cells(linhaParaRegistro, celulaTexto.Column).Value = i
+            linhaParaRegistro = linhaParaRegistro + 1
+        Next i
+        
+        Application.CutCopyMode = False
+    End If
+    
     tempoFim = Timer
     tempoExecucao = tempoFim - tempoInicio
     minutos = Int(tempoExecucao / 60)
-    segundos = tempoExecucao Mod 60
-
+    segundos = Round(tempoExecucao - minutos * 60, 2)
+    
     MsgBox "Fluxo anual e mensal segregado com sucesso!" & vbCrLf & _
            "Tempo de execução: " & minutos & " minuto(s) e " & Format(segundos, "00") & " segundo(s)", _
            vbInformation, "Processo Finalizado"
+           
+           Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
+    Application.Calculation = xlCalculationAutomatic
+    
+    ' Chamar a sub Atualizar após o término de GerarFluxo
+    Atualizar
 End Sub
+
+
+Sub Atualizar()
+    Dim ws As Worksheet
+    Dim rngPalavra1 As Range
+    Dim rngPalavra2 As Range
+    Dim rngTotal As Range
+    Dim ultimaLinha1 As Long
+    Dim ultimaColuna1 As Long
+    Dim ultimaLinha2 As Long
+    Dim linhaInicial1 As Long
+    Dim linhaInicial2 As Long
+    Dim ultimaCelulaPreenchidaLinha As Long
+    Dim linhaAntesTotal As Long
+    Dim totalLinha As Long
+    Dim cell As Range
+    Dim foundTotal As Boolean
+
+    ' Definir a planilha ativa
+    Set ws = ActiveSheet
+
+    ' Procurar a primeira palavra na planilha
+    Set rngPalavra1 = ws.Cells.Find(What:="Data Base Cessão", LookIn:=xlValues, LookAt:=xlWhole, MatchCase:=False)
+    
+    If Not rngPalavra1 Is Nothing Then
+        ' Obter a linha e coluna da célula encontrada
+        linhaInicial1 = rngPalavra1.Row + 1
+        ultimaColuna1 = ws.Cells(linhaInicial1, ws.Columns.Count).End(xlToLeft).Column
+
+        ' Obter a última linha preenchida na coluna da palavra encontrada
+        ultimaLinha1 = ws.Cells(ws.Rows.Count, rngPalavra1.Column).End(xlUp).Row
+
+        ' Selecionar a célula abaixo da primeira palavra e arrastar a fórmula até a última linha preenchida
+        ws.Range(ws.Cells(linhaInicial1, rngPalavra1.Column), ws.Cells(linhaInicial1, ultimaColuna1)).AutoFill _
+            Destination:=ws.Range(ws.Cells(linhaInicial1, rngPalavra1.Column), ws.Cells(ultimaLinha1, ultimaColuna1))
+    Else
+        MsgBox "Data Base Cessão não encontrada.", vbExclamation
+    End If
+
+    ' Procurar a segunda palavra na planilha
+    Set rngPalavra2 = ws.Cells.Find(What:="vcto final", LookIn:=xlValues, LookAt:=xlWhole, MatchCase:=False)
+
+    If Not rngPalavra2 Is Nothing Then
+        ' Obter a linha e coluna da célula encontrada
+        linhaInicial2 = rngPalavra2.Row + 1
+        ultimaCelulaPreenchidaLinha = ws.Cells(linhaInicial2, ws.Columns.Count).End(xlToLeft).Column
+
+        ' Inicializar variáveis para procurar "TOTAL"
+        totalLinha = ws.Rows.Count
+        foundTotal = False
+
+        ' Procurar "TOTAL" em toda a planilha
+        For Each cell In ws.UsedRange
+            If Not IsEmpty(cell.Value) Then
+                If VarType(cell.Value) = vbString Then
+                    If cell.Value = "TOTAL" Then
+                        If Not foundTotal Then
+                            totalLinha = cell.Row - 1 ' Linha antes da célula com "TOTAL"
+                            foundTotal = True
+                        ElseIf cell.Row - 1 < totalLinha Then
+                            totalLinha = cell.Row - 1 ' Atualizar se encontrar uma linha anterior menor
+                        End If
+                    End If
+                End If
+            End If
+        Next cell
+
+        If foundTotal Then
+            ' Selecionar a célula abaixo da segunda palavra e arrastar a fórmula até a linha antes da célula com "TOTAL"
+            ws.Range(ws.Cells(linhaInicial2, rngPalavra2.Column), ws.Cells(linhaInicial2, ultimaCelulaPreenchidaLinha)).AutoFill _
+                Destination:=ws.Range(ws.Cells(linhaInicial2, rngPalavra2.Column), ws.Cells(totalLinha, ultimaCelulaPreenchidaLinha))
+        Else
+            MsgBox "Palavra 'TOTAL' não encontrada.", vbExclamation
+        End If
+    Else
+        MsgBox "vcto final não encontrada.", vbExclamation
+    End If
+End Sub
+
