@@ -1,0 +1,40 @@
+function gerarFluxos() {
+  var ui = SpreadsheetApp.getUi();
+  var response = ui.alert('Gerar Fluxos', 'Deseja salvar antes de gerar fluxos?', ui.ButtonSet.YES_NO);
+
+  if (response == ui.Button.YES) {
+    SpreadsheetApp.getActiveSpreadsheet().toast('Salvando...', 'Salvar');
+    SpreadsheetApp.getActiveSpreadsheet().saveAndClose();
+  }
+
+  var sheetControle = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Controle Situações");
+  var sheetFluxo = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Ver. Fluxo Fin.");
+  
+  // Contadores
+  var ctrTotal = sheetControle.getRange('unidade').getValues().filter(String).length;
+  var ctrGerado = sheetFluxo.getRange('gerados').getValues().filter(String).length / 7;
+  
+  // Status
+  SpreadsheetApp.getActiveSpreadsheet().toast("Processando " + ctrGerado + "/" + ctrTotal + " Fluxos...", 'Status');
+  
+  // Copiar dados
+  var lastColumn = sheetFluxo.getLastColumn();
+  var rangeToCopy = sheetFluxo.getRange(1, 2, sheetFluxo.getLastRow(), lastColumn - 1);
+  var valuesToCopy = rangeToCopy.getValues();
+
+  // Inserir fluxos
+  while (ctrGerado < ctrTotal) {
+    var targetCell = sheetFluxo.getRange(ctrGerado * 7 + 1, 1);
+    targetCell.offset(0, 7).setValue(valuesToCopy[ctrGerado % valuesToCopy.length]);
+    ctrGerado++;
+  }
+
+  // Executar outra função
+  ocultarReexibir();
+
+  SpreadsheetApp.getActiveSpreadsheet().toast('Processamento concluído!', 'Status');
+}
+
+function ocultarReexibir() {
+  // Implementar a lógica de ocultar/reexibir como necessário
+}
