@@ -3,7 +3,6 @@ Sub GerarFluxo()
     Dim ultimaLinha As Long
     Dim linhaAtual As Long
     Dim colunaInicial As Long
-    Dim colunaAtual As Long
     Dim valorPrimeiro As Variant
     Dim nomeCliente As String
     Dim corPintura As Long
@@ -16,6 +15,7 @@ Sub GerarFluxo()
     Dim limiteHorizontal As Long
     Dim textoEncontrado As Boolean
     Dim celulaIniciar As Range
+    Dim celulaParar As Range
     Dim contador As Object
     Dim valorCelula As Variant
     Dim todosIguais As Boolean
@@ -42,8 +42,7 @@ Sub GerarFluxo()
     Dim ultimaLinhaPreenchida As Long
     Dim contagemLinhasInseridas As Long
     Dim linhaParaRegistro As Long
-    Dim ultimaCelulaFormula As Range
-    
+
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
     Application.DisplayAlerts = False
@@ -63,10 +62,13 @@ Sub GerarFluxo()
     variacao = 100
     tempoInicio = Timer
     
-    Set celulaIniciar = ws.Cells.Find(What:="INICIAR", LookIn:=xlValues, LookAt:=xlWhole)
+    ' Verificar se o nome "Iniciar" está definido
+    On Error Resume Next
+    Set celulaIniciar = ws.Range("Iniciar")
+    On Error GoTo 0
     
     If celulaIniciar Is Nothing Then
-        MsgBox "Texto 'INICIAR' não encontrado na planilha.", vbExclamation, "Erro"
+        MsgBox "Nome 'Iniciar' não encontrado na planilha.", vbExclamation, "Erro"
         Application.DisplayAlerts = True
         Application.ScreenUpdating = True
         Application.Calculation = xlCalculationAutomatic
@@ -74,10 +76,26 @@ Sub GerarFluxo()
     End If
     
     colunaInicial = celulaIniciar.Column
-    linhaAtual = celulaIniciar.Row + 2
+    linhaAtual = celulaIniciar.Row
     textoEncontrado = False
     
     ultimaLinha = ws.Cells(ws.Rows.Count, colunaInicial).End(xlUp).Row
+    
+    ' Procurar a célula nomeada como "PARAR"
+    On Error Resume Next
+    Set celulaParar = ws.Range("PARAR")
+    On Error GoTo 0
+    
+    If celulaParar Is Nothing Then
+        MsgBox "Nome 'PARAR' não encontrado na planilha.", vbExclamation, "Erro"
+        Application.DisplayAlerts = True
+        Application.ScreenUpdating = True
+        Application.Calculation = xlCalculationAutomatic
+        Exit Sub
+    End If
+    
+    ' Encontrar a linha da célula "PARAR"
+    ultimaLinha = celulaParar.Row - 1
     
     ' Inicializar a contagem de linhas inseridas
     contagemLinhasInseridas = 0
@@ -254,7 +272,7 @@ ProximaLinha:
            "Tempo de execução: " & minutos & " minuto(s) e " & Format(segundos, "00") & " segundo(s)", _
            vbInformation, "Processo Finalizado"
            
-           Application.DisplayAlerts = True
+    Application.DisplayAlerts = True
     Application.ScreenUpdating = True
     Application.Calculation = xlCalculationAutomatic
     
@@ -262,17 +280,16 @@ ProximaLinha:
     Atualizar
 End Sub
 
-
-Sub Atualizar()
+Private Sub Atualizar()
     Dim ws As Worksheet
-    Dim rngPalavra1 As Range
-    Dim rngPalavra2 As Range
+    Dim rngData As Range
+    Dim rngVcto As Range
     Dim rngTotal As Range
-    Dim ultimaLinha1 As Long
-    Dim ultimaColuna1 As Long
-    Dim ultimaLinha2 As Long
-    Dim linhaInicial1 As Long
-    Dim linhaInicial2 As Long
+    Dim ultimaLinhaData As Long
+    Dim ultimaColunaData As Long
+    Dim ultimaLinhaVcto As Long
+    Dim linhaInicialData As Long
+    Dim linhaInicialVcto As Long
     Dim ultimaCelulaPreenchidaLinha As Long
     Dim linhaAntesTotal As Long
     Dim totalLinha As Long
@@ -282,61 +299,57 @@ Sub Atualizar()
     ' Definir a planilha ativa
     Set ws = ActiveSheet
 
-    ' Procurar a primeira palavra na planilha
-    Set rngPalavra1 = ws.Cells.Find(What:="Data Base Cessão", LookIn:=xlValues, LookAt:=xlWhole, MatchCase:=False)
-    
-    If Not rngPalavra1 Is Nothing Then
+    ' Buscar a célula com o nome definido "Data"
+    On Error Resume Next
+    Set rngData = ws.Range("Data")
+    On Error GoTo 0
+
+    If Not rngData Is Nothing Then
         ' Obter a linha e coluna da célula encontrada
-        linhaInicial1 = rngPalavra1.Row + 1
-        ultimaColuna1 = ws.Cells(linhaInicial1, ws.Columns.Count).End(xlToLeft).Column
+        linhaInicialData = rngData.Row + 1
+        ultimaColunaData = ws.Cells(linhaInicialData, ws.Columns.Count).End(xlToLeft).Column
 
         ' Obter a última linha preenchida na coluna da palavra encontrada
-        ultimaLinha1 = ws.Cells(ws.Rows.Count, rngPalavra1.Column).End(xlUp).Row
+        ultimaLinhaData = ws.Cells(ws.Rows.Count, rngData.Column).End(xlUp).Row
 
-        ' Selecionar a célula abaixo da primeira palavra e arrastar a fórmula até a última linha preenchida
-        ws.Range(ws.Cells(linhaInicial1, rngPalavra1.Column), ws.Cells(linhaInicial1, ultimaColuna1)).AutoFill _
-            Destination:=ws.Range(ws.Cells(linhaInicial1, rngPalavra1.Column), ws.Cells(ultimaLinha1, ultimaColuna1))
+        ' Selecionar a célula abaixo da célula com o nome "Data" e arrastar a fórmula até a última linha preenchida
+        ws.Range(ws.Cells(linhaInicialData, rngData.Column), ws.Cells(linhaInicialData, ultimaColunaData)).AutoFill _
+            Destination:=ws.Range(ws.Cells(linhaInicialData, rngData.Column), ws.Cells(ultimaLinhaData, ultimaColunaData))
     Else
-        MsgBox "Data Base Cessão não encontrada.", vbExclamation
+        MsgBox "Nome 'Data' não encontrado.", vbExclamation
     End If
 
-    ' Procurar a segunda palavra na planilha
-    Set rngPalavra2 = ws.Cells.Find(What:="vcto final", LookIn:=xlValues, LookAt:=xlWhole, MatchCase:=False)
+    ' Buscar a célula com o nome definido "vcto"
+    On Error Resume Next
+    Set rngVcto = ws.Range("vcto")
+    On Error GoTo 0
 
-    If Not rngPalavra2 Is Nothing Then
+    If Not rngVcto Is Nothing Then
         ' Obter a linha e coluna da célula encontrada
-        linhaInicial2 = rngPalavra2.Row + 1
-        ultimaCelulaPreenchidaLinha = ws.Cells(linhaInicial2, ws.Columns.Count).End(xlToLeft).Column
+        linhaInicialVcto = rngVcto.Row + 1
+        ultimaCelulaPreenchidaLinha = ws.Cells(linhaInicialVcto, ws.Columns.Count).End(xlToLeft).Column
 
         ' Inicializar variáveis para procurar "TOTAL"
         totalLinha = ws.Rows.Count
         foundTotal = False
 
-        ' Procurar "TOTAL" em toda a planilha
-        For Each cell In ws.UsedRange
-            If Not IsEmpty(cell.Value) Then
-                If VarType(cell.Value) = vbString Then
-                    If cell.Value = "TOTAL" Then
-                        If Not foundTotal Then
-                            totalLinha = cell.Row - 1 ' Linha antes da célula com "TOTAL"
-                            foundTotal = True
-                        ElseIf cell.Row - 1 < totalLinha Then
-                            totalLinha = cell.Row - 1 ' Atualizar se encontrar uma linha anterior menor
-                        End If
-                    End If
-                End If
-            End If
-        Next cell
+        ' Buscar a célula com o nome definido "Total"
+        On Error Resume Next
+        Set rngTotal = ws.Range("Total")
+        On Error GoTo 0
 
-        If foundTotal Then
-            ' Selecionar a célula abaixo da segunda palavra e arrastar a fórmula até a linha antes da célula com "TOTAL"
-            ws.Range(ws.Cells(linhaInicial2, rngPalavra2.Column), ws.Cells(linhaInicial2, ultimaCelulaPreenchidaLinha)).AutoFill _
-                Destination:=ws.Range(ws.Cells(linhaInicial2, rngPalavra2.Column), ws.Cells(totalLinha, ultimaCelulaPreenchidaLinha))
+        If Not rngTotal Is Nothing Then
+            totalLinha = rngTotal.Row - 1 ' Linha antes da célula com "Total"
+
+            ' Selecionar a célula abaixo da célula com o nome "vcto" e arrastar a fórmula até a linha antes da célula com "Total"
+            ws.Range(ws.Cells(linhaInicialVcto, rngVcto.Column), ws.Cells(linhaInicialVcto, ultimaCelulaPreenchidaLinha)).AutoFill _
+                Destination:=ws.Range(ws.Cells(linhaInicialVcto, rngVcto.Column), ws.Cells(totalLinha, ultimaCelulaPreenchidaLinha))
         Else
-            MsgBox "Palavra 'TOTAL' não encontrada.", vbExclamation
+            MsgBox "Nome 'Total' não encontrado.", vbExclamation
         End If
     Else
-        MsgBox "vcto final não encontrada.", vbExclamation
+        MsgBox "Nome 'vcto' não encontrado.", vbExclamation
     End If
 End Sub
+
 
